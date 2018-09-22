@@ -3,40 +3,6 @@
 #include "a_star_alg.h"
 #include <deque>
 
-//Node * res = nullptr;
-
-std::deque<Node*> next_nodes(Node* n)
-{
-	std::deque<Node*> result;
-
-	int zero_ind = find_zero(n->field);
-	if (zero_ind - 4 >= 0)	// не самый верхний
-	{
-		Node * t = new Node(n, n->step + 1, n->field);
-		std::swap(t->field[zero_ind], t->field[zero_ind - 4]);
-		result.push_back(t);
-	}
-	if (zero_ind + 4 <= 15)	// не самый нижний
-	{
-		Node * t = new Node(n, n->step + 1, n->field);
-		std::swap(t->field[zero_ind], t->field[zero_ind + 4]);
-		result.push_back(t);
-	}
-	if (zero_ind % 4 != 0) // не самый левый
-	{
-		Node * t = new Node(n, n->step + 1, n->field);
-		std::swap(t->field[zero_ind], t->field[zero_ind - 1]);
-		result.push_back(t);
-	}
-	if (zero_ind % 4 != 3) // не самый правый
-	{
-		Node * t = new Node(n, n->step + 1, n->field);
-		std::swap(t->field[zero_ind], t->field[zero_ind + 1]);
-		result.push_back(t);
-	}
-	return result;
-}
-
 bool find_in_path(Node* n, std::deque<Node*> path)
 {
 	node_ptr_compare cmp;
@@ -47,11 +13,10 @@ bool find_in_path(Node* n, std::deque<Node*> path)
 }
 
 // recursive search
-//int ida_search(std::deque<Node*> path, std::unordered_set<Node*, decltype(nodeHash), decltype(node_ptr_eq)> path_set, int bound, Node*res)	// returns bound
 int ida_search(std::deque<Node*> path, int bound, Node** res)	// returns bound
 {
 	Node* n = path.back();
-	int f = n->step + h(n->field);
+	int f = n->f();
 	if (f > bound) 
 		return f;
 	if (is_solved(n->field))
@@ -89,7 +54,7 @@ void ida_star(const vector<int> & f_start)
 	{
 		std::deque<Node*> path;
 
-		Node * start = new Node(nullptr, 0, f_start);
+		Node * start = new Node(nullptr, f_start);
 		path.push_back(start);
 
 		int bound = h(f_start);

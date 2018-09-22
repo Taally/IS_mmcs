@@ -16,13 +16,55 @@ using std::endl;
 
 std::ofstream fout("output.txt");
 
+int h(const vector<int> & f) // манхэттенское расстояние с линейным конфликтом
+{
+	int res = 0;
+	for (int i = 0; i < f.size(); ++i)
+	{
+		// Manhattan distance
+		if (f[i] && f[i] != i + 1)
+		{
+			// where it should be
+			int fx = (f[i] - 1) % 4;
+			int fy = (f[i] - 1) / 4;
+
+			// where it is now
+			int ix = i % 4;
+			int iy = i / 4;
+			res += std::abs(ix - fx) + std::abs(iy - fy);
+		}
+
+		int l_conflicts = 0;
+
+		// Linear conflict
+		if (f[i])
+		{
+			for (int j = i + 1; j % 4 > i % 4; ++j)
+				if (f[j] && f[i] > f[j] && (f[i] - 1) / 4 == (f[j] - 1) / 4)
+					++l_conflicts;
+		}
+		res += l_conflicts * 2;
+	}
+	return res;
+}
+
 struct Node
 {
 	Node* parent;
 	int step;
 	vector<int> field;
 
-	Node(Node* p, int step, const vector<int> & f) : parent(p), step(step), field(f) {};
+	int f()
+	{
+		return step + h(field);
+	}
+
+	Node(Node* p, const vector<int> & field) : parent(p), field(field) 
+	{
+		if (p == nullptr)
+			step = 0;
+		else step = p->step + 1;
+	}
 };
 
 vector<int> read_field()
@@ -57,39 +99,7 @@ vector<int> read_field()
 	return res;
 }
 
-int h(const vector<int> & f) // манхэттенское расстояние с линейным конфликтом
-{
-	int res = 0;
-	for (int i = 0; i < f.size(); ++i)
-	{
-		// Manhattan distance
-		if (f[i] && f[i] != i + 1)
-		{
-			// where it should be
-			int fx = (f[i] - 1) % 4;
-			int fy = (f[i] - 1) / 4;
-
-			// where it is now
-			int ix = i % 4;
-			int iy = i / 4;
-			res += std::abs(ix - fx) + std::abs(iy - fy);
-		}
-
-		int l_conflicts = 0;
-
-		// Linear conflict
-		if (f[i])
-		{
-			for (int j = i + 1; j % 4 > i % 4; ++j)
-				if (f[j] && f[i] > f[j] && (f[i] - 1) / 4 == (f[j] - 1) / 4)
-					++l_conflicts;
-		}
-		res += l_conflicts * 2;
-	}
-	return res;
-}
-
-// cmp less
+// cmp eq
 struct node_ptr_compare {
 	bool operator() (const Node * n1, const Node * n2) const
 	{
@@ -128,8 +138,6 @@ auto node_ptr_eq = [](Node* n1, Node* n2)
 	return true;
 	//		return (std::equal(n1->field.begin(), n1->field.end(), n2->field.begin()));
 };
-
-//typedef std::unordered_set<Node*, decltype(nodeHash), decltype(node_ptr_eq)> u_set;
 
 // print to file
 void print_field(const vector<int> & f)
@@ -177,6 +185,7 @@ inline int find_zero(const vector<int> & f)
 	for (int i = 0; i < f.size(); ++i)
 		if (f[i] == 0)
 			return i;
+	return -1;
 }
 
 void print_answer(Node* start, Node* res)
@@ -192,78 +201,90 @@ void print_answer(Node* start, Node* res)
 	cout << "\nSolved in " << steps << " steps\n";
 }
 
+std::deque<Node*> next_nodes(Node* n)
+{
+	std::deque<Node*> result;
+	node_ptr_compare eq;
+
+	int zero_ind = find_zero(n->field);
+	if (zero_ind - 4 >= 0)	// не самый верхний
+	{
+		Node * t = new Node(n, n->field);
+		std::swap(t->field[zero_ind], t->field[zero_ind - 4]);
+		if (n->parent == nullptr || !eq(t, n->parent))
+			result.push_back(t);
+		else delete t;
+	}
+	if (zero_ind + 4 <= 15)	// не самый нижний
+	{
+		Node * t = new Node(n, n->field);
+		std::swap(t->field[zero_ind], t->field[zero_ind + 4]);
+		if (n->parent == nullptr || !eq(t, n->parent))
+			result.push_back(t);
+		else delete t;
+	}
+	if (zero_ind % 4 != 0) // не самый левый
+	{
+		Node * t = new Node(n, n->field);
+		std::swap(t->field[zero_ind], t->field[zero_ind - 1]);
+		if (n->parent == nullptr || !eq(t, n->parent))
+			result.push_back(t);
+		else delete t;
+	}
+	if (zero_ind % 4 != 3) // не самый правый
+	{
+		Node * t = new Node(n, n->field);
+		std::swap(t->field[zero_ind], t->field[zero_ind + 1]);
+		if (n->parent == nullptr || !eq(t, n->parent))
+			result.push_back(t);
+		else delete t;
+	}
+	return result;
+}
+
+
 void A_star(const vector<int> & f_start)
 {
 	if (!solvable(f_start))
 		cout << "It is unsolvable.\n";
 	else
 	{
-
-		Node * start = new Node(nullptr, 0, f_start);
+		Node * start = new Node(nullptr, f_start);
 		std::priority_queue<Node*, vector<Node*>, cmp_with_heuristic> q;
 		std::unordered_set<Node*, decltype(nodeHash), decltype(node_ptr_eq)> used(2000, nodeHash, node_ptr_eq);
 
 		Node* res = nullptr;
 
 		q.push(start);
+
 		while (!q.empty())
 		{
 			Node *n = q.top();
 			q.pop();
-
+			
 			if (is_solved(n->field))
 			{
 				res = n;
+
+				while (!q.empty())
+				{
+					Node* t = q.top();
+					q.pop();
+					delete t;
+				}
 				break;
 			}
 
-			int zero_ind = find_zero(n->field);
-			if (zero_ind - 4 >= 0)	// не самый верхний
+			used.insert(n);
+
+			for (auto t : next_nodes(n))
 			{
-				Node * t = new Node(n, n->step + 1, n->field);
-				std::swap(t->field[zero_ind], t->field[zero_ind - 4]);
-				if (used.find(t) == used.end())
+				if (used.find(t) == used.end())// || n->f() > t->f())
 				{
-					used.insert(t);
 					q.push(t);
 				}
 				else delete t;
 			}
-			if (zero_ind + 4 <= 15)	// не самый нижний
-			{
-				Node * t = new Node(n, n->step + 1, n->field);
-				std::swap(t->field[zero_ind], t->field[zero_ind + 4]);
-				if (used.find(t) == used.end())
-				{
-					used.insert(t);
-					q.push(t);
-				}
-				else delete t;
-			}
-			if (zero_ind % 4 != 0) // не самый левый
-			{
-				Node * t = new Node(n, n->step + 1, n->field);
-				std::swap(t->field[zero_ind], t->field[zero_ind - 1]);
-				if (used.find(t) == used.end())
-				{
-					used.insert(t);
-					q.push(t);
-				}
-				else delete t;
-			}
-			if (zero_ind % 4 != 3) // не самый правый
-			{
-				Node * t = new Node(n, n->step + 1, n->field);
-				std::swap(t->field[zero_ind], t->field[zero_ind + 1]);
-				if (used.find(t) == used.end())
-				{
-					used.insert(t);
-					q.push(t);
-				}
-				else delete t;
-			}
-		//	if (used.size() % 100 == 0)
-			//	cout << used.size() << endl;
 		}
 		if (res != nullptr)
 		{
